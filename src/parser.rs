@@ -1,4 +1,5 @@
 use crate::lexer::Token;
+use std::collections::HashMap;
 
 pub trait SyntaxAnalyzer {
     fn parse_lolcode(&mut self) -> Result<(), String>;
@@ -24,12 +25,18 @@ pub trait SyntaxAnalyzer {
 pub struct Parser {
     tokens: Vec<Token>,
     pos:usize,
+    variables: HashMap<String, String>,
 }
 
 impl Parser {
     pub fn new (tokens: Vec<Token>) -> Self {
-        Parser { tokens, pos: 0 }
+        Parser { 
+            tokens, 
+            pos: 0 ,
+        variables: HashMap::new(),
     }
+
+
 
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.pos)
@@ -120,7 +127,7 @@ fn parse_body(&mut self) -> Result<(), String> {
                 match self.peek() {
                     Some(Token::Paragraf) => self.parse_paragraph()?,
                     Some(Token::List) => self.parse_list()?,
-                    _ => return Err(format!("Syntax Error: Expected PARAGRAF or LIST after #MAEK, found, found {:?}", self.peek())),
+                    _ => return Err(format!("Syntax Error: Expected PARAGRAF or LIST after #MAEK, found {:?}", self.peek())),
                 }
             },
             Some(Token::IHaz) => self.parse_variable_define()?,
@@ -128,11 +135,7 @@ fn parse_body(&mut self) -> Result<(), String> {
             Some(Token::Gimmeh) => self.parse_gimmeh_body_element()?,
             Some(Token::Text(_)) => self.parse_inner_text()?,
 
-            Some(Token::I) => {
-                self.advance();
-                self.expect(&Token::IHaz)?;
-                self.parse_variable_define_core()?
-            },
+           
             Some(Token::Bold) | Some(Token::Italics) | Some(Token::Soundz(_)) | Some(Token::Vidz(_)) | Some(Token::Newline) => self.advance(),
             _ => {
                 return Err(format!("Syntax Error: Unexpected token in document body: {:?}", self.peek()));
@@ -146,11 +149,7 @@ fn parse_body(&mut self) -> Result<(), String> {
 fn parse_paragraph(&mut self) -> Result<(), String> {
     self.expect(&Token::Paragraf)?;
 
-    if self.peek() == Some(&Token:: I) {
-        self.advance();
-        self.expect(&Token::IHaz)?;
-        self.parse_variable_define_core()?;
-    }
+    
     while self.peek() != Some(&Token::Oic){
         self.parse_inner_paragraph()?;
     }
@@ -197,27 +196,49 @@ fn parse_variable_define(&mut self) -> Result<(), String> {
 }
 
 fn parse_variable_define_core(&mut self) -> Result<(), String> {
-    match self.peek() {
-        Some(Token::Text(_)) => self.advance(),
+    let var_name  = match self.peek() {
+        Some(Token::Text(name)) => {
+        let name_string = name.clone();
+        self.advance();
+        name_string
+    }
         _ => return Err("Syntax Error: Expected variable name (Text) after #I HAZ.".to_string())
-    }
+};
     self.expect(&Token::ItIz)?;
-
-    match self.peek(){
-        Some(Token::Text(_)) => self.advance(),
+    
+    let var_value = match self.peek(){
+        Some(Token::Text(value)) => {
+            let value_string = value.clone();
+            self.advance();
+            value_string
+        }
         _ => return Err("Syntax Error: Expected variable value (Text) after #IT IZ.".to_string()),
-    }
+    };
     self.expect(&Token::Mkay)?;
+
+    if self.variables.contains_key(&var_name){
+        return Err(format!("Semantic Error: Variable '{}' is already defined.", var_name));
+    }
+    self.variables.insert(var_name, var_value);
     Ok(())
 }
 fn parse_variable_use(&mut self) -> Result<(), String> {
     self.expect(&Token::LemmeSee)?;
 
-    match self.peek(){
-        Some(Token::Text(_)) => self.advance(),
+    let var_name = match self.peek(){
+        Some(Token::Text(name)) => {
+            let name_string = name.clone();
+            self.advance();
+            name_string
+        }
         _ => return Err ("Syntax Error: Expected variable name (Text) after #LEMME SEE.".to_string()),
-    }
+    }; 
     self.expect(&Token::Mkay)?;
+
+    if !self.variables.contains_key(&var_name) {
+        return Err(format!("Semantic Error: Variable '{}' used but not defined.", var_name));
+    }
+
     Ok(())
 }
 
@@ -305,7 +326,7 @@ fn parse_list_items(&mut self) -> Result<(), String> {
                         _ => return Err (format!("Syntax Error: Only BOLD/ITALICS allowed in list item: {:?}", self.peek()))
                     }
                 },
-                Some(Token::Text(_)) => self.parse_inner_text(),
+                Some(Token::Text(_)) => self.parse_inner_text()?,
                 _ => break,
             }
         }
@@ -321,6 +342,7 @@ fn parse_list_items(&mut self) -> Result<(), String> {
 fn parse_inner_list(&mut self) -> Result<(), String> {
     self.parse_list_items()
 }
+
 
 }
 impl SyntaxAnalyzer for Parser {
@@ -345,4 +367,6 @@ impl SyntaxAnalyzer for Parser {
     fn parse_audio(&mut self) -> Result<(), String> { self.parse_audio() }
     fn parse_video(&mut self) -> Result<(), String> { self.parse_video() }
     fn parse_newline(&mut self) -> Result<(), String> { self.parse_newline() }
+}
+
 }

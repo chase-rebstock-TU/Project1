@@ -1,5 +1,9 @@
 use crate::lexer::Token;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
+use std::process::Command;
+
 
 pub trait SyntaxAnalyzer {
     fn parse_lolcode(&mut self) -> Result<(), String>;
@@ -26,6 +30,7 @@ pub struct Parser {
     tokens: Vec<Token>,
     pos:usize,
     variables: HashMap<String, String>,
+    output: String,
 }
 
 impl Parser {
@@ -34,7 +39,10 @@ impl Parser {
             tokens, 
             pos: 0 ,
         variables: HashMap::new(),
+        output: String::new(),
     }
+}
+
 
 
 
@@ -58,12 +66,44 @@ impl Parser {
         }
     }
 
+    pub fn compile_and_run(&mut self, input_filename: &str) -> Result <(), String> {\
+        self.parse()?;
+
+        let output_filename = input_filename.strip_suffix(".lolmd")
+        .unwrap_or(input_filename)
+        .strip_suffix(".lol")
+        .unwrap_or(input_filename)
+        .to_owned() + ".html";
+
+    let mut file = match File::create(&output_filename){
+        Ok(f) => f,
+        Err(e) => return Err(format!("Code Generation Error: Could not create output file '{}': {}", output_filename, e)),   
+    };
+    if let Err(e) = file.write_all(self.output.as_bytes()){
+        return Err(format!("Code Generation Error: Could not write to output file: {}", e));
+
+    }
+let browser_result = Command::new("open") // mac only
+            .arg(&output_filename)
+            .spawn();
+
+        match browser_result {
+            Ok(_) => println!("Successfully compiled to '{}' and launched browser.", output_filename),
+            Err(e) => println!("Warning: Could not launch web browser. Please open '{}' manually. Error: {}", output_filename, e),
+        }
+        Ok(())
+    }
+
     pub fn parse(&mut self) -> Result<(), String> {
+        self.output.push_str("<!DOCTYPE html>\n<html>\n");
         self.expect(&Token::Hai)?;
         self.parse_comments()?;
         self.parse_head()?;
+        self.output.push_str("<body>\n");
         self.parse_body()?;
+        self.output.push_str("</body>\n");
         self.expect(&Token::Kthxbye)?;
+        self.output.push_str("</html>\n");
 
         if self.peek().is_some() {
             return Err(format!("Syntax Error: Content found after #KTHXBYE: {:?}", self.peek()));
@@ -93,10 +133,12 @@ fn parse_head(&mut self) -> Result<(), String> {
     if self.peek() == Some(&Token::Maek){
         self.advance();
         self.expect(&Token::Head)?;
+        self.output.push_str("<head>\n");
         self.parse_comments()?;
         self.parse_title()?;
         self.parse_comments()?;
         self.expect(&Token::Oic)?;
+        self.output.push_str("</head>\n");
     }
     Ok(())
 }
@@ -106,11 +148,17 @@ fn parse_title(&mut self) -> Result<(), String> {
     self.expect(&Token::Gimmeh)?;
     self.expect(&Token::Title)?;
 
+    self.output.push_str("<title>");
+
     match self.peek(){
-        Some(Token::Text(_)) => self.advance(),
+        Some(Token::Text(title)) => {
+            self.output.push_str(title);
+            self.advance()
+        },
         _ => return Err ("Syntax Error: #GIMMEH TITLE must be followed by text.".to_string()),
     }
     self.expect(&Token::Mkay)?;
+    self.output.push_str("</title>\n");
     Ok(())
 }
 
@@ -148,12 +196,19 @@ fn parse_body(&mut self) -> Result<(), String> {
 
 fn parse_paragraph(&mut self) -> Result<(), String> {
     self.expect(&Token::Paragraf)?;
+    self.output.push_str("<p>");
 
+    if self.peek() == Some(&Token::I) {
+        self.advance();
+        self.expect(&Token::IHaz)?;
+        self.parse_variable_define_core()?;
+    }
     
     while self.peek() != Some(&Token::Oic){
         self.parse_inner_paragraph()?;
     }
     self.expect(&Token::Oic)?;
+    self.output.push_str("</p>\n");
     Ok(())
 }
 
@@ -235,10 +290,11 @@ fn parse_variable_use(&mut self) -> Result<(), String> {
     }; 
     self.expect(&Token::Mkay)?;
 
-    if !self.variables.contains_key(&var_name) {
+    if let Some(value) = self.variables.get(&var_name) {
+        self.output.push_str(value);
+    } else {
         return Err(format!("Semantic Error: Variable '{}' used but not defined.", var_name));
     }
-
     Ok(())
 }
 
@@ -256,29 +312,43 @@ fn parse_gimmeh_body_element(&mut self) -> Result<(), String> {
 
 
 fn parse_audio(&mut self) -> Result<(), String> {
+    let mut audio_src = String::new();
     match self.peek(){
-        Some(Token::Soundz(_)) => self.advance(),
+        Some(Token::Soundz(src)) =>{
+            audio_src = src.clone();
+            self.advance();
+        },
         _ => return Err ("Internal Error: parse audio called without Soundz token.".to_string()),
     }
     self.expect(&Token::Mkay)?;
+    self.output.push_str(&format!("<audio controls><source src=\"{}\" type=\"audio/mp3\"></audio>\n", audio_src));
     Ok(())
 }
 fn parse_newline(&mut self) -> Result<(), String> {
     self.expect(&Token::Newline)?;
+    self.output.push_str("<br>\n");
     Ok(())
 }
 
 fn parse_video(&mut self) -> Result<(), String> {
+    let mut video_src = String::new();
         match self.peek() {
-            Some(Token::Vidz(_)) => self.advance(),
+            Some(Token::Vidz(src)) => {
+                video_src = src.clone();
+                self.advance();
+            },
             _ => return Err("Internal Error: parse_video called without Vidz token.".to_string()),
         }
         self.expect(&Token::Mkay)?;
+        self.output.push_str(&format!("<iframe src=\"{}\" frameborder=\"0\" allowfullscreen></iframe>\n", video_src));
         Ok(())
     }
     fn parse_inner_text(&mut self) -> Result<(), String> {
         match self.peek() {
-            Some(Token::Text(_)) => self.advance(),
+            Some(Token::Text(text)) => {
+                self.output.push_str(text);
+                self.advance()
+            },
             _ => return Err("Internal Error: parse_inner_text called without Text token.".to_string())
         }
         Ok(())
@@ -286,26 +356,32 @@ fn parse_video(&mut self) -> Result<(), String> {
 
 fn parse_bold(&mut self) -> Result<(), String> {
     self.expect(&Token::Bold)?;
+    self.output.push_str("<b>");
     match self.peek() {
         Some(Token::Text(_)) => self.parse_inner_text()?,
         _ => {}
     }
     self.expect(&Token::Mkay)?;
+    self.output.push_str("</b>");
     Ok(())
 }
 fn parse_italics(&mut self) -> Result<(), String> {
     self.expect(&Token::Italics)?;
+    self.output.push_str("<i>");
     match self.peek() {
         Some(Token::Text(_)) => self.parse_inner_text()?,
         _ => {}
     }
     self.expect(&Token::Mkay)?;
+    self.output.push_str("</i>");
     Ok(())
 }
 fn parse_list(&mut self) -> Result<(), String> {
     self.expect(&Token::List)?;
+    self.output.push_str("<ul>\n");
     self.parse_list_items()?;
     self.expect(&Token::Oic)?;
+    self.output.push_str("</ul>\n");
     Ok(())
 }
 
@@ -315,6 +391,7 @@ fn parse_list_items(&mut self) -> Result<(), String> {
     while self.peek() == Some(&Token::Gimmeh) {
         self.advance();
         self.expect(&Token::Item)?;
+        self.output.push_str("<li>");
 
         while self.peek() != Some(&Token::Mkay) && self.peek().is_some() {
             match self.peek() {
@@ -331,6 +408,7 @@ fn parse_list_items(&mut self) -> Result<(), String> {
             }
         }
         self.expect(&Token::Mkay)?;
+        self.output.push_str("</li>\n");
         item_count += 1;
         self.parse_comments()?;
     }
@@ -369,4 +447,3 @@ impl SyntaxAnalyzer for Parser {
     fn parse_newline(&mut self) -> Result<(), String> { self.parse_newline() }
 }
 
-}

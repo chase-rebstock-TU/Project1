@@ -6,7 +6,7 @@ use std::str::Chars;
 pub enum Token {
     Hai, Kthxbye, Obtw, Tldr, Maek, Oic, Gimmeh, Mkay, Head, Title, 
     Paragraf, Bold, Italics, List, Item, Newline,
-    Soundz(String), Vidz(String), IHaz, ItIz, LemmeSee,
+    Soundz(String), Vidz(String), IHaz, ItIz, LemmeSee, I,
     VarDef(String), VarVal(String), Text(String),
 }
 
@@ -61,6 +61,7 @@ impl<'a> Lexer<'a> {
                     "MKAY" => tokens.push(Token::Mkay),
 
                     "GIMMEH" => {
+                        tokens.push(Token::Gimmeh);
                         let next_word = self.consume_word().to_uppercase();
                         match next_word.as_str() {
                             "BOLD" | "ITALICS" | "TITLE" => {
@@ -79,7 +80,7 @@ impl<'a> Lexer<'a> {
                             }
                             "SOUNDZ" | "VIDZ" => {
                                 self.skip_whitespace();
-                                let address = self.consume_text();
+                                let address = self.consume_word();
                                 match next_word.as_str() {
                                     "SOUNDZ" => tokens.push(Token::Soundz(address)),
                                     "VIDZ" => tokens.push(Token::Vidz(address)),
@@ -120,17 +121,32 @@ impl<'a> Lexer<'a> {
 
                     _ => return Err(format!("Unknown annotation '#{}' on line {}", annotation_core, self.line)),
                 }
-            } else {
-                
-                let text = self.consume_text();
-                if !text.is_empty() {
-                    tokens.push(Token::Text(text));
+            } else { 
+                let word = self.consume_word();
+                let upper_word = word.to_uppercase();
+
+                match upper_word.as_str() {
+                    
+                    "PARAGRAF" => tokens.push(Token::Paragraf),
+                    "LIST" => tokens.push(Token::List),
+                    "HEAD" => tokens.push(Token::Head),
+
+                   
+                    _ => {
+                        
+                        let mut text = word; 
+                        text.push_str(&self.consume_text());
+                        
+                        if !text.is_empty() {
+                            tokens.push(Token::Text(text));
+                        }
+                    }
                 }
             }
-        }
-
+        } 
         Ok(tokens)
     }
+
 
    
     fn peek_char(&mut self) -> Option<&char> {
@@ -177,7 +193,7 @@ impl<'a> Lexer<'a> {
             s.push(c);
             self.get_char();
         }
-        s.trim().to_string()
+        s
     }
 
     fn skip_whitespace(&mut self) {
@@ -215,25 +231,3 @@ impl<'a> LexicalAnalyzer for Lexer<'a> {
     }
 }
 
-fn main() {
-    let source = "#HAI
-#MAEK HEAD
-#GIMMEH TITLE My Page #MKAY
-#OIC
-#MAEK PARAGRAF
-#GIMMEH BOLD Hello World #MKAY
-#GIMMEH ITALICS Rust Lexer #MKAY
-#GIMMEH NEWLINE
-#GIMMEH SOUNDZ http://example.com/sound.mp3 #MKAY
-#GIMMEH VIDZ http://youtube.com/embed/videoid #MKAY
-#KTHXBYE";
-
-    let mut lexer = Lexer::new(source);
-    match lexer.lex() {
-        Ok(tokens) => {
-            println!("--- Lexing Successful ---");
-            println!("{:#?}", tokens)
-        },
-        Err(e) => eprintln!("Lexer error: {}", e),
-    }
-}

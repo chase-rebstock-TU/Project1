@@ -66,7 +66,7 @@ impl Parser {
         }
     }
 
-    pub fn compile_and_run(&mut self, input_filename: &str) -> Result <(), String> {\
+    pub fn compile_and_run(&mut self, input_filename: &str) -> Result <(), String> {
         self.parse()?;
 
         let output_filename = input_filename.strip_suffix(".lolmd")
@@ -112,7 +112,9 @@ let browser_result = Command::new("open") // mac only
         Ok(())
     }
     fn parse_comments(&mut self) -> Result<(), String> {
-        while self.peek() == Some(&Token::Obtw)  {
+        loop {
+         match self.peek(){ 
+             Some(&Token::Obtw) => {
             self.advance();
             let mut found_tldr = false;
             while let Some(token) = self.peek() {
@@ -126,15 +128,44 @@ let browser_result = Command::new("open") // mac only
             if !found_tldr {
                 return Err("Syntax Error: Comment started with #OBTW but never closed with #TLDR.".to_string());
             }
-    }
+    }, 
+    Some(Token::Text(s)) => {
+        if s.trim().is_empty() {
+            self.advance();
+        } else {
+            break;
+        }
+    },
+    Some(&Token::Newline) => {
+        self.advance();
+    },
+    _ => break,
+         }
+        }
+
+
     Ok(())
 }
 fn parse_head(&mut self) -> Result<(), String> {
     if self.peek() == Some(&Token::Maek){
         self.advance();
-        self.expect(&Token::Head)?;
+
+        let expected_token_found = match self.peek(){
+            Some(Token::Head) => {
+                self.advance();
+                true
+            }
+            Some(Token::Text(s))if s.trim().to_uppercase() == "HEAD" => {
+                self.advance();
+                true
+            }
+            _ => false,
+        };
+        if !expected_token_found {
+            return Err(format!("Syntax Error: Expected HEAD after #MAEK, found {:?}", self.peek()));
+        }
+        
         self.output.push_str("<head>\n");
-        self.parse_comments()?;
         self.parse_title()?;
         self.parse_comments()?;
         self.expect(&Token::Oic)?;
@@ -150,13 +181,15 @@ fn parse_title(&mut self) -> Result<(), String> {
 
     self.output.push_str("<title>");
 
-    match self.peek(){
+    let title_text = match self.peek(){
         Some(Token::Text(title)) => {
-            self.output.push_str(title);
-            self.advance()
+            let title_clone = title.clone();
+            self.advance();
+            title_clone
         },
         _ => return Err ("Syntax Error: #GIMMEH TITLE must be followed by text.".to_string()),
-    }
+    };
+    self.output.push_str(&title_text);
     self.expect(&Token::Mkay)?;
     self.output.push_str("</title>\n");
     Ok(())
@@ -173,16 +206,24 @@ fn parse_body(&mut self) -> Result<(), String> {
                 self.advance();
 
                 match self.peek() {
-                    Some(Token::Paragraf) => self.parse_paragraph()?,
-                    Some(Token::List) => self.parse_list()?,
-                    _ => return Err(format!("Syntax Error: Expected PARAGRAF or LIST after #MAEK, found {:?}", self.peek())),
-                }
+                    Some(Token::Paragraf) => {
+                        self.advance();
+                        self.parse_paragraph()?
+                    }
+                    Some(Token::List) => {
+                        self.advance();
+                        self.parse_list()?
+                    }
+                
+                 _ => return Err(format!("Syntax Error: Expected PARAGRAF or LIST after #MAEK, found {:?}", self.peek())),
+            }
             },
             Some(Token::IHaz) => self.parse_variable_define()?,
             Some(Token::LemmeSee) => self.parse_variable_use()?,
             Some(Token::Gimmeh) => self.parse_gimmeh_body_element()?,
             Some(Token::Text(_)) => self.parse_inner_text()?,
 
+        
            
             Some(Token::Bold) | Some(Token::Italics) | Some(Token::Soundz(_)) | Some(Token::Vidz(_)) | Some(Token::Newline) => self.advance(),
             _ => {
@@ -195,20 +236,26 @@ fn parse_body(&mut self) -> Result<(), String> {
 
 
 fn parse_paragraph(&mut self) -> Result<(), String> {
-    self.expect(&Token::Paragraf)?;
+   
+   let original_variables = self.variables.clone();
+
     self.output.push_str("<p>");
 
-    if self.peek() == Some(&Token::I) {
+    if self.peek() == Some(&Token::IHaz) {
         self.advance();
-        self.expect(&Token::IHaz)?;
         self.parse_variable_define_core()?;
     }
+    
+    self.parse_comments()?;
     
     while self.peek() != Some(&Token::Oic){
         self.parse_inner_paragraph()?;
     }
     self.expect(&Token::Oic)?;
     self.output.push_str("</p>\n");
+
+self.variables = original_variables;
+
     Ok(())
 }
 
@@ -271,9 +318,9 @@ fn parse_variable_define_core(&mut self) -> Result<(), String> {
     };
     self.expect(&Token::Mkay)?;
 
-    if self.variables.contains_key(&var_name){
-        return Err(format!("Semantic Error: Variable '{}' is already defined.", var_name));
-    }
+    self.parse_comments()?;
+
+    
     self.variables.insert(var_name, var_value);
     Ok(())
 }
@@ -312,14 +359,14 @@ fn parse_gimmeh_body_element(&mut self) -> Result<(), String> {
 
 
 fn parse_audio(&mut self) -> Result<(), String> {
-    let mut audio_src = String::new();
-    match self.peek(){
+   let audio_src =  match self.peek(){
         Some(Token::Soundz(src)) =>{
-            audio_src = src.clone();
+            let src_clone = src.clone();
             self.advance();
+            src_clone
         },
         _ => return Err ("Internal Error: parse audio called without Soundz token.".to_string()),
-    }
+    };
     self.expect(&Token::Mkay)?;
     self.output.push_str(&format!("<audio controls><source src=\"{}\" type=\"audio/mp3\"></audio>\n", audio_src));
     Ok(())
@@ -331,26 +378,28 @@ fn parse_newline(&mut self) -> Result<(), String> {
 }
 
 fn parse_video(&mut self) -> Result<(), String> {
-    let mut video_src = String::new();
-        match self.peek() {
+       let video_src =  match self.peek() {
             Some(Token::Vidz(src)) => {
-                video_src = src.clone();
+                let src_clone = src.clone();
                 self.advance();
+                src_clone
             },
             _ => return Err("Internal Error: parse_video called without Vidz token.".to_string()),
-        }
+        };
         self.expect(&Token::Mkay)?;
         self.output.push_str(&format!("<iframe src=\"{}\" frameborder=\"0\" allowfullscreen></iframe>\n", video_src));
         Ok(())
     }
     fn parse_inner_text(&mut self) -> Result<(), String> {
-        match self.peek() {
+       let text_content =  match self.peek() {
             Some(Token::Text(text)) => {
-                self.output.push_str(text);
-                self.advance()
+                let text_clone = text.clone();
+                self.advance();
+                text_clone
             },
             _ => return Err("Internal Error: parse_inner_text called without Text token.".to_string())
-        }
+        };
+        self.output.push_str(&text_content);
         Ok(())
     }
 

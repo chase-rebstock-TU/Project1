@@ -1,0 +1,158 @@
+Chase Rebstock
+
+Towson University
+
+COSC 455
+
+Project 1 Part 1
+
+Phase 1: Grammar Design (15 points) Deadline: October 10, 2025, 
+11:59pm (Blackboard)
+
+Write and submit a BNF grammar (plain BNF, not ANTLR and no use of EBNF notations like 
++, *, etc.) for our LOLCODE Markdown language. Your grammar should be parsable using a 
+recursive-descent parser (as described in class and illustrated in Labs #1-5) using a one 
+token lookahead (i.e., like Lab 5). Note that this grammar is strictly to be written in BNF, not 
+EBNF! Additionally, develop and submit the ANTLR-based grammar definition for this 
+language. The submission of this phase should be two files (a text/Word file of the BNF and 
+a .g ANTLR grammar file submitted to Blackboard. 
+
+BNF
+
+<program> ::= <HAI_Block> <body> <KTHXBYE_Block>
+
+<HAI_Block> ::= “#HAI”
+
+<KTHXBYE_Block> ::= “#KTHXBYE”
+
+<body> ::= <all_elements> | <empty>
+
+<element_list> ::= <comment> | <head_block> | <paragraph_block> | <bold_block> | 
+<italics_block> | <list_block> | <newline> | <sound_block>| <video_block>| <var_def> | 
+<var_use> | <text>
+
+<comment> ::= “OBTW” <text_block> “TLDR”
+
+<head_block> ::= “#MAEK HEAD” <head_content> “#OIC”
+
+<head_content>::=<title_block> | <empty>
+
+<title_block>::= “#GIMMEH TITLE” <text> “#MKAY
+
+<paragraph_block>::= “#MAEK PARAGRAF” <paragraph_element_list> “#OIC”
+
+
+<paragraph_element_list>::= <paragraph_element> <paragraph_element_list> | 
+<paragraph_element>
+
+<paragraph_element>::= <bold_block> 
+|<italics_block>|<list_block>|<sound_block>|<video_block>|<newline>|<var_def>|<var_us
+e>|<text>
+
+<bold_block>::= “#GIMMEH BOLD” <text> “#MKAY”
+
+<italics_block>::= “#GIMMEH ITALICS” <text> “#MKAY”
+
+<list_block>::= “#MAEK LIST” <item_list> “#OIC”
+
+<item_list>::= <item> <item_list> | <item>
+
+<list_item>::= “#GIMMEH ITEM” <item_content> “#MKAY”
+
+<item_content> ::= <bold_block> | <italics_block>|<text>
+
+<newline>::= “#GIMMEH NEWLINE”
+
+<sound_block>::= “#GIMMEH SOUNDZ” <address> “#MKAY”
+
+<video_block>::= “#GIMMEH VIDZ” <address> “#MKAY”
+
+<var_def>::= “#I HAZ” <var_name> “#IT IZ” <text> “#MKAY”
+
+<var_use>::= “#LEMME SEE” <var_name> “#MKAY”
+
+<var_name>::= <text>
+
+<address>::= <text>
+
+<id> ::= <letter> <id_rest>
+
+<id_rest> ::= <letter_or_digit> <id_rest> | <empty>
+
+<letter_or_digit> ::= <letter> | <digit>
+
+<text>::=<char> <text> |<char>
+
+<char>::= <letter>|<digit>|<punctuation>|<whitespace>
+
+<letter>::= 
+“A”|”B”|”C”|”D”|”E”|”F”|”G”|”H”|”I”|”J”|”K”|”L”|”M”|”N”|”O”|”P”|”Q”|”R”|”S”|”T”|”U”|”V”|
+”W”|”X”|”Y”|”Z”|”a”|”b”|”c”|”d”|”e|”f”|”g”|”h”|”i”|”j”|”k”|”l”|”m”|”n”|”o”|”p”|”q”|”r”|”s”|”t”
+|”u”|”v”|”w”|”x”|”y”|”z”
+
+
+<digit>::= “0”|”1”|”2”|”3”|”4”|”5”|”6”|”7”|”8”|”9”
+
+<punctuation>::= “,” | “.”|”\”|”?”|”!”|”%”|”\”|”/”
+
+**I wrote <empty> to indicate an empty spot**
+
+Part 2. 
+
+For the second part, the indentation on the examples in the doc gave me errors, I tried to 
+troubleshoot it but all the fixes I found were things we had not learned in class, so I avoided 
+adding that and just tried to manually fix the input.
+
+https://theantlrguy.atlassian.net/wiki/spaces/ANTLR3/pages/2687102/Five+minute+introd
+uction+to+ANTLR+3#:~:text=However%2C%20if%20we%20write%20the,the%20Lexer%20
+for%20channel%20=%20HIDDEN this was the documentation I used to try and 
+troubleshoot, it’s under the whitespace section.
+
+Not sure if this will dock me points but I tried my best to implement it as best I could
+
+this was the input I used:
+#HAI
+
+#OBTW This is a LOLCODE Markdown source file #TLDR
+
+#MAEK HEAD
+
+#GIMMEH TITLE The Simpsons #MKAY
+
+#OIC
+
+#MAEK PARAGRAF The Simpsons! #GIMMEH NEWLINE
+
+#GIMMEH SOUNDZ http://www.televisiontunes.com/themesongs/The%20Simpsons.mp3 
+#MKAY
+
+#GIMMEH NEWLINE
+
+The members of the #GIMMEH BOLD Simpson #MKAY family are:
+
+#MAEK LIST
+
+#GIMMEH ITEM Homer Simpson #MKAY
+
+#GIMMEH ITEM Marge Simpson #MKAY
+
+#GIMMEH ITEM Bart Simpson #MKAY
+
+#GIMMEH ITEM Lisa Simpson #MKAY
+
+
+#GIMMEH ITEM Maggie Simpson #MKAY
+
+#OIC
+
+#GIMMEH NEWLINE
+
+Lets watch now:
+
+#GIMMEH NEWLINE
+
+#GIMMEH VIDZ http://www.youtube.com/embed/zoO0s1ukcqQ #MKAY
+
+#OIC
+
+#KTHXBYE

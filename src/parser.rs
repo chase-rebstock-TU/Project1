@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
+//imports
 
 
 pub trait SyntaxAnalyzer {
@@ -25,11 +26,11 @@ pub trait SyntaxAnalyzer {
     fn parse_video(&mut self) -> Result<(), String>;
     fn parse_newline(&mut self) -> Result<(), String>;
 }
-
-pub struct Parser {
+///main parser, converts tokens into structured html, tracks variables, manages scope
+pub struct Parser { 
     tokens: Vec<Token>,
     pos:usize,
-    variables: HashMap<String, String>,
+    variables: HashMap<String, String>, //hashmap stores and manages variables
     output: String,
 }
 
@@ -45,11 +46,11 @@ impl Parser {
 
 
 
-
+///gets position
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.pos)
     }
-
+///moves position forward
     fn advance(&mut self) {
         self.pos += 1;
     }
@@ -196,16 +197,16 @@ fn parse_title(&mut self) -> Result<(), String> {
 }
 
 
-fn parse_body(&mut self) -> Result<(), String> {
+fn parse_body(&mut self) -> Result<(), String> { //parses doc body and goes until #KTHXBYE
     while self.peek() != Some(&Token::Kthxbye){
 
         self.parse_comments()?;
 
-        match self.peek() {
-            Some(Token::Maek) => {
+        match self.peek() { 
+            Some(Token::Maek) => { //handles structured tokens
                 self.advance();
 
-                match self.peek() {
+                match self.peek() { //picks from paragraf or list
                     Some(Token::Paragraf) => {
                         self.advance();
                         self.parse_paragraph()?
@@ -214,7 +215,7 @@ fn parse_body(&mut self) -> Result<(), String> {
                         self.advance();
                         self.parse_list()?
                     }
-                
+                //if another value given, error given
                  _ => return Err(format!("Syntax Error: Expected PARAGRAF or LIST after #MAEK, found {:?}", self.peek())),
             }
             },
@@ -223,7 +224,7 @@ fn parse_body(&mut self) -> Result<(), String> {
             Some(Token::Gimmeh) => self.parse_gimmeh_body_element()?,
             Some(Token::Text(_)) => self.parse_inner_text()?,
 
-        
+        //body elements
            
             Some(Token::Bold) | Some(Token::Italics) | Some(Token::Soundz(_)) | Some(Token::Vidz(_)) | Some(Token::Newline) => self.advance(),
             _ => {
@@ -234,26 +235,27 @@ fn parse_body(&mut self) -> Result<(), String> {
     Ok(())
 }
 
-
+///parses core paragraph content
+/// implements local variable scope
 fn parse_paragraph(&mut self) -> Result<(), String> {
-   
+   //saves global state and hashmap is cloned to allow for local changes
    let original_variables = self.variables.clone();
 
     self.output.push_str("<p>");
-
+//deals with local var definitions
     if self.peek() == Some(&Token::IHaz) {
         self.advance();
         self.parse_variable_define_core()?;
     }
     
     self.parse_comments()?;
-    
+    //parses until #OIC
     while self.peek() != Some(&Token::Oic){
         self.parse_inner_paragraph()?;
     }
     self.expect(&Token::Oic)?;
     self.output.push_str("</p>\n");
-
+//variables return to global state 
 self.variables = original_variables;
 
     Ok(())
@@ -296,7 +298,7 @@ fn parse_variable_define(&mut self) -> Result<(), String> {
     self.expect(&Token::IHaz)?;
     self.parse_variable_define_core()
 }
-
+//main portion for assigning values to variables
 fn parse_variable_define_core(&mut self) -> Result<(), String> {
     let var_name  = match self.peek() {
         Some(Token::Text(name)) => {
@@ -357,7 +359,7 @@ fn parse_gimmeh_body_element(&mut self) -> Result<(), String> {
     }
  }
 
-
+//parses audio content
 fn parse_audio(&mut self) -> Result<(), String> {
    let audio_src =  match self.peek(){
         Some(Token::Soundz(src)) =>{
@@ -376,7 +378,7 @@ fn parse_newline(&mut self) -> Result<(), String> {
     self.output.push_str("<br>\n");
     Ok(())
 }
-
+//video parsing
 fn parse_video(&mut self) -> Result<(), String> {
        let video_src =  match self.peek() {
             Some(Token::Vidz(src)) => {
@@ -402,7 +404,7 @@ fn parse_video(&mut self) -> Result<(), String> {
         self.output.push_str(&text_content);
         Ok(())
     }
-
+// functions for text design
 fn parse_bold(&mut self) -> Result<(), String> {
     self.expect(&Token::Bold)?;
     self.output.push_str("<b>");
@@ -424,7 +426,7 @@ fn parse_italics(&mut self) -> Result<(), String> {
     self.expect(&Token::Mkay)?;
     self.output.push_str("</i>");
     Ok(())
-}
+}//parses unordered list 
 fn parse_list(&mut self) -> Result<(), String> {
     self.expect(&Token::List)?;
     self.output.push_str("<ul>\n");
@@ -433,7 +435,7 @@ fn parse_list(&mut self) -> Result<(), String> {
     self.output.push_str("</ul>\n");
     Ok(())
 }
-
+//handles list items inside a list
 fn parse_list_items(&mut self) -> Result<(), String> {
     let mut item_count = 0;
     self.parse_comments()?;
